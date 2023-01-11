@@ -1,42 +1,60 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.0;
 
-import "../node_modules/@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+import "./IERC1155.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
 contract Joker is IERC1155 {
-    mapping(uint => mapping(address => uint)) private balances;
-    mapping(address => mapping(address => bool)) operatorApproval;
+    string baseUri;
+    uint tokenId;
+    address owner;
+    string public name;
+    string public symbol;
 
-    event TransferSingle(
-        address indexed operator,
-        address indexed from,
-        address indexed to,
-        uint256 id,
-        uint256 value
-    );
+    mapping(uint => uint) private totalSupply;
+    mapping(uint => uint) private Cap;
+    mapping(uint => mapping(address => uint)) private Balance;
+    mapping(address => mapping(address => bool)) private OperatorApproval;
+    mapping(uint => string) private Uri;
 
-    event TransferBatch(
-        address indexed operator,
-        address indexed from,
-        address indexed to,
-        uint256[] ids,
-        uint256[] values
-    );
+    constructor(string memory _uri) {
+        baseUri = _uri;
+        owner = msg.sender;
+        name = "Zartaj's collection";
+        symbol = "ZAR";
 
-    event ApprovalForAll(
-        address indexed account,
-        address indexed operator,
-        bool approved
-    );
+        while (tokenId < 4) {
+            mintNew(owner, 10, "", 20);
+        }
+    }
 
-    event URI(string value, uint256 indexed id);
+    modifier onlyOwner() {
+        require(msg.sender == owner);
+        _;
+    }
+
+    function getUri(uint _tokenId) internal view returns (string memory) {
+        return
+            string(
+                abi.encodePacked(baseUri, Strings.toString(_tokenId), ".json")
+            );
+    }
+
+    function uri(uint _tokenId) external view returns (string memory) {
+        string memory mappedUri = Uri[_tokenId];
+        if (bytes(mappedUri).length > 0) {
+            return mappedUri;
+        } else {
+            return getUri(_tokenId);
+        }
+    }
 
     function balanceOf(
         address account,
         uint256 id
     ) public view returns (uint256) {
         require(account != address(0), "address is Invalid");
-        return balances[id][account];
+        return Balance[id][account];
     }
 
     function balanceOfBatch(
@@ -48,17 +66,17 @@ contract Joker is IERC1155 {
             "ERC1155: accounts and ids length mismatch"
         );
 
-        uint256[] memory batchBalances = new uint256[](accounts.length);
+        uint256[] memory batchBalance = new uint256[](accounts.length);
 
         for (uint256 i = 0; i < accounts.length; ++i) {
-            batchBalances[i] = balanceOf(accounts[i], ids[i]);
+            batchBalance[i] = balanceOf(accounts[i], ids[i]);
         }
 
-        return batchBalances;
+        return batchBalance;
     }
 
     function setApprovalForAll(address operator, bool approved) external {
-        operatorApproval[msg.sender][operator] = approved;
+        OperatorApproval[msg.sender][operator] = approved;
         emit ApprovalForAll(msg.sender, operator, approved);
     }
 
@@ -66,7 +84,7 @@ contract Joker is IERC1155 {
         address account,
         address operator
     ) public view returns (bool) {
-        return operatorApproval[account][operator];
+        return OperatorApproval[account][operator];
     }
 
     function safeTransferFrom(
@@ -80,20 +98,73 @@ contract Joker is IERC1155 {
             from == msg.sender || isApprovedForAll(from, msg.sender),
             "neither owner nor approved"
         );
-        require(balances[id][from] >= amount, "Not enough balance");
+        require(Balance[id][from] >= amount, "Not enough balance");
         require(to != address(0), "zero address");
 
-        balances[id][from] -= amount;
-        balances[id][to] += amount;
+        Balance[id][from] -= amount;
+        Balance[id][to] += amount;
+
+        emit TransferSingle(msg.sender, from, to, id, amount);
     }
 
     function safeBatchTransferFrom(
-        address from,
-        address to,
-        uint256[] calldata ids,
-        uint256[] calldata amounts,
+        address _from,
+        address _to,
+        uint256[] memory _ids,
+        uint256[] memory _amounts,
         bytes calldata data
     ) external {
-        
+        require(
+            _from == msg.sender || isApprovedForAll(_from, msg.sender),
+            "neither owner nor approved"
+        );
+        require(_to != address(0), "zero address");
+
+        require(
+            _ids.length == _amounts.length,
+            "ids and amounts array length should be same"
+        );
+
+        for (uint i = 0; i < _ids.length; i++) {
+            uint id = _ids[i];
+            uint amount = _amounts[i];
+            require(Balance[id][_from] >= amount, "Not enough balance");
+            Balance[id][_from] -= amount;
+            Balance[id][_to] += amount;
+        }
+        emit TransferBatch(msg.sender, _from, _to, _ids, _amounts);
+    }
+
+    function mintNew(
+        address _to,
+        uint _amount,
+        string memory _uri,
+        uint maxSupply
+    ) public {
+        uint _tokenId = tokenId;
+        Cap[_tokenId] = maxSupply;
+        require(
+            totalSupply[_tokenId] + _amount <= maxSupply,
+            "Amount can't exceed maximum supply"
+        );
+        Balance[_tokenId][_to] += _amount;
+        Uri[_tokenId] = _uri;
+        totalSupply[_tokenId] += _amount;
+        tokenId++;
+        emit TransferSingle(msg.sender, address(0), _to, _tokenId, _amount);
+        emit URI(_uri, _tokenId);
+    }
+
+    function mintOld(address _to, uint _tokenId, uint _amount) public {
+        require(
+            totalSupply[_tokenId] + _amount <= Cap[_tokenId],
+            "Amount can't exceed maximum supply"
+        );
+        require(_tokenId < tokenId, "token Id deosn't exists");
+
+        Balance[_tokenId][_to] += _amount;
+        totalSupply[_tokenId] += _amount;
+
+        emit TransferSingle(msg.sender, address(0), _to, _tokenId, _amount);
     }
 }
