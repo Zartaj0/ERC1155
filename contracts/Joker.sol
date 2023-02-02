@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "./IERC1155.sol";
+import "./IERC1155Receiver.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
 contract Joker is IERC1155 {
@@ -16,7 +17,7 @@ contract Joker is IERC1155 {
     mapping(uint => mapping(address => uint)) private Balance;
     mapping(address => mapping(address => bool)) private OperatorApproval;
     mapping(uint => string) private Uri;
-    mapping (uint => address) internal isOwner;
+    mapping(uint => address) private isOwner;
 
     constructor(string memory _uri) {
         baseUri = _uri;
@@ -26,8 +27,7 @@ contract Joker is IERC1155 {
 
         while (tokenId < 4) {
             mintNew(owner, 10, "", 20);
-         isOwner[tokenId] = msg.sender;
-
+            isOwner[tokenId] = msg.sender;
         }
     }
 
@@ -91,23 +91,25 @@ contract Joker is IERC1155 {
     }
 
     function safeTransferFrom(
-        address from,
-        address to,
-        uint256 id,
-        uint256 amount,
-        bytes calldata data
+        address _from,
+        address _to,
+        uint256 _id,
+        uint256 _amount,
+        bytes calldata _data
     ) external {
         require(
-            from == msg.sender || isApprovedForAll(from, msg.sender),
+            _from == msg.sender || isApprovedForAll(_from, msg.sender),
             "neither owner nor approved"
         );
-        require(Balance[id][from] >= amount, "Not enough balance");
-        require(to != address(0), "zero address");
+        require(Balance[_id][_from] >= _amount, "Not enough balance");
+        require(_to != address(0), "zero address");
 
-        Balance[id][from] -= amount;
-        Balance[id][to] += amount;
+        Balance[_id][_from] -= _amount;
+        Balance[_id][_to] += _amount;
 
-        emit TransferSingle(msg.sender, from, to, id, amount);
+        emit TransferSingle(msg.sender, _from, _to, _id, _amount);
+        safeTransferCheck(msg.sender, _from, _to, _id,_amount,_data);
+
     }
 
     function safeBatchTransferFrom(
@@ -136,6 +138,7 @@ contract Joker is IERC1155 {
             Balance[id][_to] += amount;
         }
         emit TransferBatch(msg.sender, _from, _to, _ids, _amounts);
+        SafeBatchTransferCheck(msg.sender, _from, _to, _ids,_amounts,data);
     }
 
     function mintNew(
@@ -159,7 +162,8 @@ contract Joker is IERC1155 {
         emit URI(_uri, _tokenId);
     }
 
-    function mintOld(address _to, uint _tokenId, uint _amount) public {
+    function mintOld(address _to, uint _tokenId, uint _amount) external {
+        require(msg.sender == isOwner[_tokenId], "Sender not the owner");
         require(
             totalSupply[_tokenId] + _amount <= Cap[_tokenId],
             "Amount can't exceed maximum supply"
@@ -172,7 +176,54 @@ contract Joker is IERC1155 {
         emit TransferSingle(msg.sender, address(0), _to, _tokenId, _amount);
     }
 
-    function burn(uint _tokenId, uint _amount) external {
+    function burn(uint _tokenId, uint _amount) external {}
 
+    function isContract(address _addr) private view returns (bool) {
+    return _addr.code.length > 0;
+}
+
+    function safeTransferCheck(
+        address operator,
+        address from,
+        address to,
+        uint256 id,
+        uint256 amount,
+        bytes memory data
+    ) private {
+        if (isContract(to)) {
+            try IERC1155Receiver(to).onERC1155Received(operator, from, id, amount, data) returns (bytes4 response) {
+                if (response != IERC1155Receiver.onERC1155Received.selector) {
+                    revert("ERC1155: ERC1155Receiver rejected tokens");
+                }
+            } catch Error(string memory reason) {
+                revert(reason);
+            } catch {
+                revert("ERC1155: transfer to non-ERC1155Receiver implementer");
+            }
+        }
     }
+
+      function SafeBatchTransferCheck(
+        address operator,
+        address from,
+        address to,
+        uint256[] memory ids,
+        uint256[] memory amounts,
+        bytes memory data
+    ) private {
+        if (isContract(to)) {
+            try IERC1155Receiver(to).onERC1155BatchReceived(operator, from, ids, amounts, data) returns (
+                bytes4 response
+            ) {
+                if (response != IERC1155Receiver.onERC1155BatchReceived.selector) {
+                    revert("ERC1155: ERC1155Receiver rejected tokens");
+                }
+            } catch Error(string memory reason) {
+                revert(reason);
+            } catch {
+                revert("ERC1155: transfer to non-ERC1155Receiver implementer");
+            }
+        }
+    }
+
 }
