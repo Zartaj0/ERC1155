@@ -16,6 +16,7 @@ contract Joker is IERC1155 {
     mapping(uint => mapping(address => uint)) private Balance;
     mapping(address => mapping(address => bool)) private OperatorApproval;
     mapping(uint => string) private Uri;
+    mapping (uint => address) internal isOwner;
 
     constructor(string memory _uri) {
         baseUri = _uri;
@@ -25,6 +26,8 @@ contract Joker is IERC1155 {
 
         while (tokenId < 4) {
             mintNew(owner, 10, "", 20);
+         isOwner[tokenId] = msg.sender;
+
         }
     }
 
@@ -151,6 +154,7 @@ contract Joker is IERC1155 {
         Uri[_tokenId] = _uri;
         totalSupply[_tokenId] += _amount;
         tokenId++;
+        isOwner[_tokenId] = msg.sender;
         emit TransferSingle(msg.sender, address(0), _to, _tokenId, _amount);
         emit URI(_uri, _tokenId);
     }
@@ -166,5 +170,9 @@ contract Joker is IERC1155 {
         totalSupply[_tokenId] += _amount;
 
         emit TransferSingle(msg.sender, address(0), _to, _tokenId, _amount);
+    }
+
+    function burn(uint _tokenId, uint _amount) external {
+
     }
 }
