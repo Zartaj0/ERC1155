@@ -5,19 +5,34 @@ import "./IERC1155.sol";
 import "./IERC1155Receiver.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
+/// @title ERC1155 Token
+/// @author Zartaj
+/// @notice Simple free NFT contract
+/// @dev Simple implementation of ERC1155
+
 contract Joker is IERC1155 {
+    /// @notice stores the basse URI which is later concatenated with token ID to get the token URI
     string baseUri;
-    uint tokenId;
+
+    ///@notice assigns unique ids to each token. increments every time new token is minted
+    uint256 tokenId;
+
+    ///@notice owner of the contract
     address owner;
+
+    ///@notice name and symbol
     string public name;
     string public symbol;
 
-    mapping(uint => uint) private totalSupply;
-    mapping(uint => uint) private Cap;
-    mapping(uint => mapping(address => uint)) private Balance;
+    ///@notice stores totalSupply of each token
+    mapping(uint256 => uint256) private totalSupply;
+
+///@notice stores maximum supply of each token
+    mapping(uint256 => uint256) private Cap;
+    mapping(uint256 => mapping(address => uint256)) private Balance;
     mapping(address => mapping(address => bool)) private OperatorApproval;
-    mapping(uint => string) private Uri;
-    mapping(uint => address) private isOwner;
+    mapping(uint256 => string) private Uri;
+    mapping(uint256 => address) private isOwner;
 
     constructor(string memory _uri) {
         baseUri = _uri;
@@ -36,14 +51,14 @@ contract Joker is IERC1155 {
         _;
     }
 
-    function getUri(uint _tokenId) internal view returns (string memory) {
+    function getUri(uint256 _tokenId) internal view returns (string memory) {
         return
             string(
                 abi.encodePacked(baseUri, Strings.toString(_tokenId), ".json")
             );
     }
 
-    function uri(uint _tokenId) external view returns (string memory) {
+    function uri(uint256 _tokenId) external view returns (string memory) {
         string memory mappedUri = Uri[_tokenId];
         if (bytes(mappedUri).length > 0) {
             return mappedUri;
@@ -52,18 +67,20 @@ contract Joker is IERC1155 {
         }
     }
 
-    function balanceOf(
-        address account,
-        uint256 id
-    ) public view returns (uint256) {
+    function balanceOf(address account, uint256 id)
+        public
+        view
+        returns (uint256)
+    {
         require(account != address(0), "address is Invalid");
         return Balance[id][account];
     }
 
-    function balanceOfBatch(
-        address[] calldata accounts,
-        uint256[] calldata ids
-    ) external view returns (uint256[] memory) {
+    function balanceOfBatch(address[] calldata accounts, uint256[] calldata ids)
+        external
+        view
+        returns (uint256[] memory)
+    {
         require(
             accounts.length == ids.length,
             "ERC1155: accounts and ids length mismatch"
@@ -83,10 +100,11 @@ contract Joker is IERC1155 {
         emit ApprovalForAll(msg.sender, operator, approved);
     }
 
-    function isApprovedForAll(
-        address account,
-        address operator
-    ) public view returns (bool) {
+    function isApprovedForAll(address account, address operator)
+        public
+        view
+        returns (bool)
+    {
         return OperatorApproval[account][operator];
     }
 
@@ -108,8 +126,7 @@ contract Joker is IERC1155 {
         Balance[_id][_to] += _amount;
 
         emit TransferSingle(msg.sender, _from, _to, _id, _amount);
-        safeTransferCheck(msg.sender, _from, _to, _id,_amount,_data);
-
+        safeTransferCheck(msg.sender, _from, _to, _id, _amount, _data);
     }
 
     function safeBatchTransferFrom(
@@ -130,24 +147,24 @@ contract Joker is IERC1155 {
             "ids and amounts array length should be same"
         );
 
-        for (uint i = 0; i < _ids.length; i++) {
-            uint id = _ids[i];
-            uint amount = _amounts[i];
+        for (uint256 i = 0; i < _ids.length; i++) {
+            uint256 id = _ids[i];
+            uint256 amount = _amounts[i];
             require(Balance[id][_from] >= amount, "Not enough balance");
             Balance[id][_from] -= amount;
             Balance[id][_to] += amount;
         }
         emit TransferBatch(msg.sender, _from, _to, _ids, _amounts);
-        SafeBatchTransferCheck(msg.sender, _from, _to, _ids,_amounts,data);
+        SafeBatchTransferCheck(msg.sender, _from, _to, _ids, _amounts, data);
     }
 
     function mintNew(
         address _to,
-        uint _amount,
+        uint256 _amount,
         string memory _uri,
-        uint maxSupply
+        uint256 maxSupply
     ) public {
-        uint _tokenId = tokenId;
+        uint256 _tokenId = tokenId;
         Cap[_tokenId] = maxSupply;
         require(
             totalSupply[_tokenId] + _amount <= maxSupply,
@@ -162,7 +179,11 @@ contract Joker is IERC1155 {
         emit URI(_uri, _tokenId);
     }
 
-    function mintOld(address _to, uint _tokenId, uint _amount) external {
+    function mintOld(
+        address _to,
+        uint256 _tokenId,
+        uint256 _amount
+    ) external {
         require(msg.sender == isOwner[_tokenId], "Sender not the owner");
         require(
             totalSupply[_tokenId] + _amount <= Cap[_tokenId],
@@ -176,11 +197,11 @@ contract Joker is IERC1155 {
         emit TransferSingle(msg.sender, address(0), _to, _tokenId, _amount);
     }
 
-    function burn(uint _tokenId, uint _amount) external {}
+    function burn(uint256 _tokenId, uint256 _amount) external {}
 
     function isContract(address _addr) private view returns (bool) {
-    return _addr.code.length > 0;
-}
+        return _addr.code.length > 0;
+    }
 
     function safeTransferCheck(
         address operator,
@@ -191,7 +212,15 @@ contract Joker is IERC1155 {
         bytes memory data
     ) private {
         if (isContract(to)) {
-            try IERC1155Receiver(to).onERC1155Received(operator, from, id, amount, data) returns (bytes4 response) {
+            try
+                IERC1155Receiver(to).onERC1155Received(
+                    operator,
+                    from,
+                    id,
+                    amount,
+                    data
+                )
+            returns (bytes4 response) {
                 if (response != IERC1155Receiver.onERC1155Received.selector) {
                     revert("ERC1155: ERC1155Receiver rejected tokens");
                 }
@@ -203,7 +232,7 @@ contract Joker is IERC1155 {
         }
     }
 
-      function SafeBatchTransferCheck(
+    function SafeBatchTransferCheck(
         address operator,
         address from,
         address to,
@@ -212,10 +241,18 @@ contract Joker is IERC1155 {
         bytes memory data
     ) private {
         if (isContract(to)) {
-            try IERC1155Receiver(to).onERC1155BatchReceived(operator, from, ids, amounts, data) returns (
-                bytes4 response
-            ) {
-                if (response != IERC1155Receiver.onERC1155BatchReceived.selector) {
+            try
+                IERC1155Receiver(to).onERC1155BatchReceived(
+                    operator,
+                    from,
+                    ids,
+                    amounts,
+                    data
+                )
+            returns (bytes4 response) {
+                if (
+                    response != IERC1155Receiver.onERC1155BatchReceived.selector
+                ) {
                     revert("ERC1155: ERC1155Receiver rejected tokens");
                 }
             } catch Error(string memory reason) {
@@ -225,5 +262,4 @@ contract Joker is IERC1155 {
             }
         }
     }
-
 }
