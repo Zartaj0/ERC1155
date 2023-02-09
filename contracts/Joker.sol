@@ -12,17 +12,17 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 
 contract Joker is IERC1155 {
     /// @notice stores the basse URI which is later concatenated with token ID to get the token URI
-    string baseUri;
+    string  baseUri;
 
     ///@notice assigns unique ids to each token. increments every time new token is minted
-    uint256 tokenId;
+    uint256  tokenId;
 
     ///@notice owner of the contract
-    address owner;
+    address immutable owner;
 
     ///@notice name and symbol
-    string public name;
-    string public symbol;
+    string public  name;
+    string public  symbol;
 
     ///@notice stores totalSupply of each token
     mapping(uint256 => uint256) private totalSupply;
@@ -173,7 +173,7 @@ contract Joker is IERC1155 {
         Balance[_tokenId][_to] += _amount;
         Uri[_tokenId] = _uri;
         totalSupply[_tokenId] += _amount;
-        tokenId++;
+        tokenId += 1;
         isOwner[_tokenId] = msg.sender;
         emit TransferSingle(msg.sender, address(0), _to, _tokenId, _amount);
         emit URI(_uri, _tokenId);
